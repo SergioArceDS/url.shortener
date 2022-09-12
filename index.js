@@ -1,21 +1,38 @@
 const express = require('express');
 const session = require('express-session');
 const flash =  require('connect-flash');
+const MongoStore = require('connect-mongo'); 
 const passport = require('passport');
+const mongoSanitize = require('express-mongo-sanitize');
+const cors = require('cors');
 const User = require('./models/User');
 const { create } = require("express-handlebars");
 const csrf = require('csurf');
 require('dotenv').config()
-require('./database/db');
+const clientDB = require('./database/db');
 
 
 const app = express();
 
+const corsOptions = {
+    credentias: true,
+    origin: process.env.PATHHEROKU || "*",
+    methods: ['GET', 'POST'],
+}
+
+app.use(cors());
+
 app.use(session({
-    secret: 'keyboard cat',
+    secret: process.env.SECRETSESSION,
     resave: false,
     saveUninitialized: false,
-    name: "secret-name-blablabla",
+    name: "session-user",
+    store: MongoStore.create({
+        clientPromise: clientDB,
+        dbName: process.env.DBNAME
+    }),
+    cookie: {secure: process.env.MODO === 'production', 
+    maxAge: 30 * 24 * 60 * 1000},
 }));
 
 app.use(flash());
@@ -43,6 +60,10 @@ app.set("views", "./views");
 
 app.use(express.urlencoded({extended: true}));
 app.use(csrf());
+app.use(mongoSanitize());//Middleware evitar mongodb injection
+
+
+
 app.use((req, res, next) => { //middleware para mandar el token de forma global
     res.locals.csrfToken = req.csrfToken();
     res.locals.mensajes = req.flash("mensajes"); //mandar mensajes del flash de forma global
